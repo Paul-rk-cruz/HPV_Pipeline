@@ -207,7 +207,7 @@ process Trim_Reads {
 
     """
 }
-process Mapping {
+process HPV_Workflow {
     // container "docker.io/paulrkcruz/hrv-pipeline:latest" 
     errorStrategy 'retry'
     maxRetries 3
