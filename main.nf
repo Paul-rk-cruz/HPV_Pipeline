@@ -221,12 +221,12 @@ process Trim_Reads {
 }
 process HPV_Workflow {
     container "docker.io/paulrkcruz/hrv-pipeline:latest" 
-    errorStrategy 'retry'
-    maxRetries 3
+    // errorStrategy 'retry'
+    // maxRetries 3
     // echo true
 
     input: 
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_final_summary.csv") from Trim_out_SE
+        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_summary.csv") from Trim_out_SE
         file ref_hpv_all_fasta from ref_hpv_all
         file ref_hpv_highrisk_fasta from ref_hpv_highrisk
 
@@ -234,19 +234,19 @@ process HPV_Workflow {
         tuple val(base), file("${base}_final_summary.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
         tuple val (base), file("*") into Dump_files_ch
 
-    publishDir "${params.outdir}summary", mode: 'copy', pattern:'*.csv*'
+    publishDir "${params.outdir}summary", mode: 'copy', pattern:'*_final_summary.csv*'
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
+    publishDir "${params.outdir}bbmap_stats", mode: 'copy', pattern:'*.txt*'
 
     script:
 
     """
     #!/bin/bash
 
-    bbmap.sh in=${base}_R1.trimmed.fastq.gz ref=${ref_hpv_all_fasta} outm=${base}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
+    /usr/local/miniconda/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${ref_hpv_all_fasta} outm=${base}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
     
-    /usr/local/miniconda/bin/samtools view -bS ${base}_hpvAll.sam | samtools sort -o ${base}_hpvAll.sorted.bam 
-
-
+    /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
+    /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
 
     cp ${base}_summary.csv ${base}_final_summary.csv
 
