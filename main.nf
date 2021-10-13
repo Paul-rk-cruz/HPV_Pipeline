@@ -36,7 +36,7 @@ def helpMsg() {
     
 	Pipeline Usage:
     To run the pipeline, enter the following in the command line:
-        nextflow run FILE_PATH/HPV_Pipeline/main.nf --reads PATH_TO_FASTQ --outdir PATH_TO_OUTPUT_DIR
+        nextflow run FILE_PATH/HPV_Pipeline/main.nf --reads PATH_TO_FASTQ --outdir PATH_TO_OUTPUT_DIR --SingleEnd
     Valid CLI Arguments:
     REQUIRED:
       --reads                       Path to input fastq.gz folder).
@@ -78,6 +78,9 @@ params.MINLEN = "35"
 MINLEN = "35"
 // Setup Parameters to default values
 params.skipTrimming = false
+params.singleEnd = false
+params.helpMsg = false
+params.ADAPTERS_PE = false
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 /*                                                    */
@@ -217,7 +220,7 @@ process Trim_Reads {
     """
 }
 process HPV_Workflow {
-    // container "docker.io/paulrkcruz/hrv-pipeline:latest" 
+    container "docker.io/paulrkcruz/hrv-pipeline:latest" 
     errorStrategy 'retry'
     maxRetries 3
     // echo true
@@ -229,14 +232,19 @@ process HPV_Workflow {
         tuple val(base), file("${base}_summary2.csv") into All_files_ch
         tuple val (base), file("*") into Dump_map1_ch
 
-    publishDir "${params.outdir}Summary", mode: 'copy', pattern:'*.csv*'
+    publishDir "${params.outdir}summary", mode: 'copy', pattern:'*.csv*'
+    publishDir "${params.outdir}bam", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
 
     script:
 
     """
     #!/bin/bash
 
-    Rscript '${baseDir}/scripts/' results/rnaseq/dge ${exp_file}
+    bbmap.sh in=${base}_R1.trimmed.fastq.gz ref=./fastas/hpvAll.fasta outm=${base}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
+    
+    /usr/local/miniconda/bin/samtools view -bS ${base}_hpvAll.sam | samtools sort -o ${base}_hpvAll.sorted.bam 
+
+
 
     cp ${base}_summary.csv ${base}_final_summary.csv
 
