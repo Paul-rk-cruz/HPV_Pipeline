@@ -65,7 +65,6 @@ params.ADAPTERS_SE = file("${baseDir}/adapters/TruSeq2-SE.fa")
 params.ADAPTERS_EE = file("${baseDir}/adapters/TruSeq2-PE.fa")
 ADAPTERS_SE = file("${baseDir}/adapters/TruSeq2-SE.fa")
 ADAPTERS_PE = file("${baseDir}/adapters/TruSeq2-PE.fa")
-vapid_rhinovirus_sbt = file("${baseDir}/vapid/rhinovirus.sbt")
 params.SETTING = "2:30:10:1:true"
 SETTING = "2:30:10:1:true"
 params.LEADING = "3"
@@ -89,16 +88,16 @@ params.ADAPTERS_PE = false
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
-ref_hpv_all = file("${baseDir}/ref_fasta/hpvAll.fasta")
-ref_hpv_highrisk = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
+REF_HPV_ALL = file("${baseDir}/ref_fasta/hpvAll.fasta")
+REF_HPV_HIGHRISK = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 /*                                                    */
-/*                   SCRIPT PATHS                   */
+/*                  R SCRIPT PATH                     */
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
-merge_stats_r = file("${baseDir}/scripts/merge_stats_bestMap_mod.R")
+MERGE_STATS_R = file("${baseDir}/scripts/merge_stats_bestMap_mod.R")
 // Show help msg
 if (params.helpMsg){
     helpMsg()
@@ -226,14 +225,14 @@ process Trim_Reads {
 }
 process Mapping {
     container "docker.io/paulrkcruz/hrv-pipeline:latest" 
-    // errorStrategy 'retry'
-    // maxRetries 3
+    errorStrategy 'retry'
+    maxRetries 3
     // echo true
 
     input: 
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_summary.csv") from Trim_out_SE
-        file ref_hpv_all_fasta from ref_hpv_all
-        file ref_hpv_highrisk_fasta from ref_hpv_highrisk
+        file REF_HPV_ALL_FASTA from REF_HPV_ALL
+        file REF_HPV_HIGHRISK_FASTA from REF_HPV_HIGHRISK
 
     output:
         tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
@@ -247,7 +246,7 @@ process Mapping {
     """
     #!/bin/bash
 
-    /usr/local/miniconda/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${ref_hpv_all_fasta} outm=${base}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
+    /usr/local/miniconda/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
     
     /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
     /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
@@ -264,6 +263,7 @@ process Analysis {
 
     input: 
     tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") from Mapping_files_ch
+        file MERGE_STATS_R
         RUN_NAME
 
     output:
@@ -276,7 +276,7 @@ process Analysis {
     """
     #!/bin/bash
 
-    Rscript --vanilla '${baseDir}/scripts/merge_stats_bestMap_mod.R' ${params.outdir} ${base}_hpvAll_scafstats.txt ${RUN_NAME}
+    Rscript --vanilla ${MERGE_STATS_R} ${params.outdir} ${base}_hpvAll_scafstats.txt ${RUN_NAME}
 
     cp ${base}_summary2.csv ${base}_final_summary.csv
 
