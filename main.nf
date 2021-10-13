@@ -187,7 +187,6 @@ process Trim_Reads {
 
     publishDir "${params.outdir}trimmed_fastqs", mode: 'copy',pattern:'*.trimmed.fastq*'
 
-
     script:
     """
     #!/bin/bash

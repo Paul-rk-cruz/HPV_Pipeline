@@ -1,0 +1,9 @@
+
+for i in *.fastq.gz
+do
+sample=$(basename ${i} _R1.trimmed.fastq.gz)
+echo $sample
+bbmap.sh in=${sample}_R1.trimmed.fastq.gz ref=./fastas/hpvAll.fasta outm=${sample}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${sample}_hpvAll_covstats.txt scafstats=${sample}_hpvAll_scafstats.txt
+samtools view -bS ${sample}_hpvAll.sam | samtools sort -o ./sorted_bams/${sample}_hpvAll.sorted.bam 
+rm *.sam
+done
