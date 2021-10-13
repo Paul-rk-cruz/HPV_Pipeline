@@ -80,6 +80,7 @@ MINLEN = "35"
 params.skipTrimming = false
 params.singleEnd = false
 params.helpMsg = false
+params.runName = false
 params.ADAPTERS_PE = false
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
@@ -97,7 +98,7 @@ ref_hpv_highrisk = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
-merge_stats_r = file("${baseDir}/scripts/merge_stats_bestMap.R")
+merge_stats_r = file("${baseDir}/scripts/merge_stats_bestMap_mod.R")
 // Show help msg
 if (params.helpMsg){
     helpMsg()
@@ -134,6 +135,10 @@ if(params.singleEnd == false) {
         .fromPath("${params.reads}*.gz")
         .ifEmpty { error "> Cannot locate single-end reads in: ${params.reads}.\n> Please enter a valid file path." }
         .map { it -> file(it)}
+}
+// Setup Run Name
+if(params.runName != false) {
+    RUN_NAME = params.runName
 }
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
@@ -213,13 +218,13 @@ process Trim_Reads {
     num_trimmed=\$((\$(gunzip -c \$base'.trimmed.fastq.gz' | wc -l)/4))
     printf "\$num_trimmed" >> ${R1}_num_trimmed.txt
     percent_trimmed=\$((100-\$((100*num_trimmed/num_untrimmed))))
-    echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed> \$base'_summary.csv'
+    echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> \$base'_summary.csv'
     printf "\$base,\$num_untrimmed,\$num_trimmed,\$percent_trimmed" >> \$base'_summary.csv'
     ls -latr
 
     """
 }
-process HPV_Workflow {
+process Mapping {
     container "docker.io/paulrkcruz/hrv-pipeline:latest" 
     // errorStrategy 'retry'
     // maxRetries 3
@@ -231,13 +236,12 @@ process HPV_Workflow {
         file ref_hpv_highrisk_fasta from ref_hpv_highrisk
 
     output:
-        tuple val(base), file("${base}_final_summary.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
+        tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
         tuple val (base), file("*") into Dump_files_ch
 
-    publishDir "${params.outdir}summary", mode: 'copy', pattern:'*_final_summary.csv*'
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
     publishDir "${params.outdir}bbmap_stats", mode: 'copy', pattern:'*.txt*'
-
+       
     script:
 
     """
@@ -248,7 +252,33 @@ process HPV_Workflow {
     /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
     /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
 
-    cp ${base}_summary.csv ${base}_final_summary.csv
+    cp ${base}_summary.csv ${base}_summary2.csv
+
+    """
+}
+process Analysis {
+    container "quay.io/michellejlin/tpallidum_wgs" 
+    // errorStrategy 'retry'
+    // maxRetries 3
+    // echo true
+
+    input: 
+    tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") from Mapping_files_ch
+        RUN_NAME
+
+    output:
+        tuple val(base), file("${base}_final_summary.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
+
+    publishDir "${params.outdir}summary", mode: 'copy', pattern:'*_final_summary.csv*'
+    
+    script:
+
+    """
+    #!/bin/bash
+
+    Rscript --vanilla '${baseDir}/scripts/merge_stats_bestMap_mod.R' ${params.outdir} ${base}_hpvAll_scafstats.txt ${RUN_NAME}
+
+    cp ${base}_summary2.csv ${base}_final_summary.csv
 
     """
 }
