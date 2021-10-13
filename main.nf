@@ -217,7 +217,7 @@ process Trim_Reads {
     """
 }
 process HPV_Workflow {
-    container "docker.io/paulrkcruz/hrv-pipeline:latest" 
+    // container "docker.io/paulrkcruz/hrv-pipeline:latest" 
     errorStrategy 'retry'
     maxRetries 3
     // echo true
@@ -230,7 +230,6 @@ process HPV_Workflow {
         tuple val (base), file("*") into Dump_map1_ch
 
     publishDir "${params.outdir}Summary", mode: 'copy', pattern:'*.csv*'
-
 
     script:
 
