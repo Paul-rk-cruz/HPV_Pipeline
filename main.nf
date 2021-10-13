@@ -189,7 +189,7 @@ log.info "______________________________________________________________________
  * Trimming of low quality and short NGS sequences.
  */
 if (params.singleEnd) {
-process Trim_Reads {
+process Trimming {
     container "docker.io/paulrkcruz/hrv-pipeline:latest"
     errorStrategy 'retry'
     maxRetries 3
