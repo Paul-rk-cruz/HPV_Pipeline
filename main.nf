@@ -81,12 +81,12 @@ params.skipTrimming = false
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 /*                                                    */
-/*            HPV MULTI-FASTA REFERENCES            */
+/*            HPV MULTI-FASTA REFERENCES              */
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
-BLAST_DB_VP1 = file("${baseDir}/ref_fasta/hpvAll.fasta")
-BLAST_DB_VP1 = file("${baseDir}/ref_fasta/hpvAll.fasta")
+ref_hpv_all = file("${baseDir}/ref_fasta/hpvAll.fasta")
+ref_hpv_highrisk = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
 // Show help msg
 if (params.helpMsg){
     helpMsg()
