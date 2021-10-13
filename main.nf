@@ -207,7 +207,7 @@ process Trim_Reads {
     """
 }
 process HPV_Workflow {
-    // container "docker.io/paulrkcruz/hrv-pipeline:latest" 
+    container "docker.io/paulrkcruz/hrv-pipeline:latest" 
     errorStrategy 'retry'
     maxRetries 3
     // echo true
@@ -227,6 +227,7 @@ process HPV_Workflow {
     """
     #!/bin/bash
 
+    Rscript '${baseDir}/scripts/' results/rnaseq/dge ${exp_file}
 
     cp ${base}_summary.csv ${base}_final_summary.csv
 
