@@ -76,15 +76,17 @@ params.SWINDOW = "4:20"
 SWINDOW = "4:20"
 params.MINLEN = "35"
 MINLEN = "35"
-////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////
-/*                                                    */
-/*            VIRAL MULTI-FASTA REFERENCES            */
-/*                                                    */
-////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////
-// Setup MULTIFASTA Reference parameters.
+// Setup Parameters to default values
 params.skipTrimming = false
+////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////
+/*                                                    */
+/*            HPV MULTI-FASTA REFERENCES            */
+/*                                                    */
+////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////
+BLAST_DB_VP1 = file("${baseDir}/ref_fasta/hpvAll.fasta")
+BLAST_DB_VP1 = file("${baseDir}/ref_fasta/hpvAll.fasta")
 // Show help msg
 if (params.helpMsg){
     helpMsg()
@@ -216,7 +218,7 @@ process HPV_Workflow {
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_final_summary.csv") from Trim_out_SE
 
     output:
-        tuple val(base), file("${base}_summary2.csv") into Everything_ch
+        tuple val(base), file("${base}_summary2.csv") into All_files_ch
         tuple val (base), file("*") into Dump_map1_ch
 
     publishDir "${params.outdir}Summary", mode: 'copy', pattern:'*.csv*'
