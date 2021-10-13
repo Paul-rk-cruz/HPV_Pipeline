@@ -87,6 +87,14 @@ params.skipTrimming = false
 ////////////////////////////////////////////////////////
 ref_hpv_all = file("${baseDir}/ref_fasta/hpvAll.fasta")
 ref_hpv_highrisk = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
+////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////
+/*                                                    */
+/*                   SCRIPT PATHS                   */
+/*                                                    */
+////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////
+merge_stats_r = file("${baseDir}/scripts/merge_stats_bestMap.R")
 // Show help msg
 if (params.helpMsg){
     helpMsg()
