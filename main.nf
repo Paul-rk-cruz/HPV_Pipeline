@@ -97,7 +97,7 @@ REF_HPV_HIGHRISK = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
-MERGE_STATS_R = file("${baseDir}/scripts/merge_stats_bestMap_mod.R")
+MERGE_STATS_R = file("${baseDir}/scripts/merge_stats_bestMap.R")
 // Show help msg
 if (params.helpMsg){
     helpMsg()
@@ -163,7 +163,7 @@ summary['HRV Pipeline directory path:']          = workflow.projectDir
 summary['Input directory path:']               = params.reads
 summary['Output directory path:']          = params.outdir
 summary['Work directory path:']         = workflow.workDir
-summary['Fastq type:']           	  = params.singleEnd ? 'Single-End' : 'Paired-End'
+summary['Sequence type:']           	  = params.singleEnd ? 'Single-End' : 'Paired-End'
 if(workflow.revision) summary['Pipeline Release'] = workflow.revision
 if (params.singleEnd) {
 summary['Trimmomatic adapters:'] = params.ADAPTERS_SE
@@ -193,6 +193,7 @@ process Trimming {
     container "docker.io/paulrkcruz/hrv-pipeline:latest"
     errorStrategy 'retry'
     maxRetries 3
+    // echo true
 
     input:
         file R1 from input_read_ch
@@ -217,7 +218,7 @@ process Trimming {
     num_trimmed=\$((\$(gunzip -c \$base'.trimmed.fastq.gz' | wc -l)/4))
     printf "\$num_trimmed" >> ${R1}_num_trimmed.txt
     percent_trimmed=\$((100-\$((100*num_trimmed/num_untrimmed))))
-    echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> \$base'_summary.csv'
+    echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed> \$base'_summary.csv'
     printf "\$base,\$num_untrimmed,\$num_trimmed,\$percent_trimmed" >> \$base'_summary.csv'
     ls -latr
 
@@ -247,27 +248,27 @@ process Mapping {
     """
     #!/bin/bash
 
-    /usr/local/miniconda/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
+    /usr/local/miniconda/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam threads=${task.cpus} maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
     
     /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
     /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
-
-    cp ${base}_summary.csv ${base}_summary2.csv
 
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${RUN_NAME}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${RUN_NAME}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${RUN_NAME}.csv'
 
-    mkdir ${params.outdir}/analysis
+    mkdir ${params.outdir}analysis
     cp filtered_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
     cp all_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
     cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+
+    cp ${base}_summary.csv ${base}_summary2.csv
 
     """
 }
 process Analysis {
     container "docker.io/rocker/tidyverse:latest"
-    // errorStrategy 'retry'
+    errorStrategy 'ignore'
     // maxRetries 3
     // echo true
 
@@ -277,60 +278,55 @@ process Analysis {
         RUN_NAME
 
     output:
-        tuple val(base), file("${base}_summary.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
+        tuple val(base), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
 
-    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_summary.csv*'
+    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_trim_stats.csv*'
     
     script:
 
     """
     #!/usr/bin/env Rscript
 
-    # quiet warning msg/pipeline crash
-    show_col_types = FALSE
-
-    # Import libraries
+    # IMPORT LIBRARIES
     library(tidyverse)
-    #NOTE: After a first pass, realized that ambiguous calls on some genomes are causing misses. Removing duplicate genomes (the ones less used) for 16,18,35,45,51,39,59. May end up doing same for non-high risk
 
-    output_directory="${params.outdir}"
+    # SETUP VARIABLES
+    output_directory <- "${params.outdir}"
     run_name <- "${RUN_NAME}"
     threshold_filter <- 0.05
     path <- "${params.outdir}/bbmap_stats/"
     ext <- "_hpvAll_scafstats.txt" 
     glob <- paste0("*",ext)
 
+    # SET PATH
     setwd(path)
 
-    #read in mapping stats and merge:
+    # READ BBMAP OUTPUT - SCAFFOLD STATS
     files <- fs::dir_ls(path, glob=glob)   
     scaf_stats <- files %>% purrr::map_dfr(read_tsv, .id = "Sample")
 
-    #tidy sample names:
+    # SAMPLE NAMES:
     scaf_stats\$Sample <- gsub(path, "",scaf_stats\$Sample)
     scaf_stats\$Sample <- gsub(ext, "",scaf_stats\$Sample)
 
-    #Rename Columns:
+    # RENAME COLUMNS:
     colnames(scaf_stats) <- c("Sample", "Reference", "Percent Unambiguous Reads", "x", "Percent Ambiguous Reads", "x", "Unambiguous Reads", "Ambiguous Reads", "Assigned Reads", "x")
-
     ref_type <- str_split_fixed(scaf_stats\$Reference, "_", 2)
     colnames(ref_type) <- c("Reference Accession", "HPV Type")
-
     scaf_stats <- cbind(scaf_stats, ref_type)
 
-
-    #Filter Relevant Columns 
+    # FILTER RELEVANT COLUMNS 
     scaf_stats <- scaf_stats[,c(1,11,12,3,5,7,8,9)]
-
-    filtered_scaf_stats <- filter(scaf_stats, `Percent Unambiguous Reads` > threshold_filter) 
-
+    filtered_scaf_stats <- filter(scaf_stats, 'Percent Unambiguous Reads' > threshold_filter) 
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
-    write.csv(filtered_scaf_stats, paste0("${params.outdir}/analysis/filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0("${params.outdir}/analysis/all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0("${params.outdir}/analysis/topHit_scafstats_", run_name, ".csv"))
+    # WRITE CSV
+    write.csv(filtered_scaf_stats, paste0("${params.outdir}analysis/filtered_scafstats_", run_name, ".csv"))
+    write.csv(scaf_stats, paste0("${params.outdir}analysis/all_scafstats_", run_name, ".csv"))
+    write.csv(top_hit, paste0("${params.outdir}analysis/topHit_scafstats_", run_name, ".csv"))
 
-    cp ${base}_summary2.csv ${base}_summary.csv
+    # OUTPUT TRIM_STATS SUMMARY
+    cp ${base}_summary2.csv ${base}_trim_stats.csv
     
     """
 }
