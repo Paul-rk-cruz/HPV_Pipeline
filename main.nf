@@ -233,6 +233,7 @@ process Mapping {
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_summary.csv") from Trim_out_SE
         file REF_HPV_ALL_FASTA from REF_HPV_ALL
         file REF_HPV_HIGHRISK_FASTA from REF_HPV_HIGHRISK
+        RUN_NAME
 
     output:
         tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
@@ -253,10 +254,19 @@ process Mapping {
 
     cp ${base}_summary.csv ${base}_summary2.csv
 
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${RUN_NAME}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${RUN_NAME}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${RUN_NAME}.csv'
+
+    mkdir ${params.outdir}/analysis
+    cp filtered_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+    cp all_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+    cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+
     """
 }
 process Analysis {
-    // container "quay.io/michellejlin/tpallidum_wgs"
+    container "docker.io/rocker/tidyverse:latest"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
@@ -267,36 +277,30 @@ process Analysis {
         RUN_NAME
 
     output:
-        tuple val(base), file("${base}_final_summary.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
+        tuple val(base), file("${base}_summary.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
 
-    publishDir "${params.outdir}summary", mode: 'copy', pattern:'*_final_summary.csv*'
+    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_summary.csv*'
     
     script:
 
     """
     #!/usr/bin/env Rscript
-    # HPV Pipeline v1.0 NGS Analysis R Script - Modified for Nextflow compatibility
+
+    # quiet warning msg/pipeline crash
+    show_col_types = FALSE
 
     # Import libraries
     library(tidyverse)
     #NOTE: After a first pass, realized that ambiguous calls on some genomes are causing misses. Removing duplicate genomes (the ones less used) for 16,18,35,45,51,39,59. May end up doing same for non-high risk
 
-    # SETUP COMMAND LINE ARGUMENTS
-    #Get args from command line 
-    args<-(commandArgs(TRUE));
-    if(length(args)==0){
-        print("No arguments supplied.")
-    }else{
-        output_directory=args[[1]]
-        path=args[[2]]
-        run_name=args[[3]]
-        }
-
-    threshold_filter <- 0.05 #percentage above which calls are considered real
-    ext <- "_hpvAll_scafstats.txt" #scafstats file name extension
+    output_directory="${params.outdir}"
+    run_name <- "${RUN_NAME}"
+    threshold_filter <- 0.05
+    path <- "${params.outdir}/bbmap_stats/"
+    ext <- "_hpvAll_scafstats.txt" 
     glob <- paste0("*",ext)
 
-    setwd(path) 
+    setwd(path)
 
     #read in mapping stats and merge:
     files <- fs::dir_ls(path, glob=glob)   
@@ -322,17 +326,12 @@ process Analysis {
 
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
-    write.csv(filtered_scaf_stats, paste0(output_directory + "filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0(output_directory + "all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0(output_directory + "topHit_scafstats_", run_name, ".csv"))
+    write.csv(filtered_scaf_stats, paste0("${params.outdir}/analysis/filtered_scafstats_", run_name, ".csv"))
+    write.csv(scaf_stats, paste0("${params.outdir}/analysis/all_scafstats_", run_name, ".csv"))
+    write.csv(top_hit, paste0("${params.outdir}/analysis/topHit_scafstats_", run_name, ".csv"))
 
+    cp ${base}_summary2.csv ${base}_summary.csv
+    
     """
 }
 }
-
-    // #!/bin/bash
-    // ls -latr
-    
-    // Rscript --vanilla ${MERGE_STATS_R} \'${params.outdir}' \'${params.outdir}/bbmap_stats/' \'${RUN_NAME}'
-
-    // cp ${base}_summary2.csv ${base}_final_summary.csv

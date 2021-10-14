@@ -46,6 +46,6 @@ filtered_scaf_stats <- filter(scaf_stats, `Percent Unambiguous Reads` > threshol
 
 top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
-write.csv(filtered_scaf_stats, paste0(output_directory + "filtered_scafstats_", run_name, ".csv"))
-write.csv(scaf_stats, paste0(output_directory + "all_scafstats_", run_name, ".csv"))
-write.csv(top_hit, paste0(output_directory + "topHit_scafstats_", run_name, ".csv"))
+write.csv(filtered_scaf_stats, paste0("~${params.outdir}filtered_scafstats_", run_name, ".csv"))
+write.csv(scaf_stats, paste0("~${params.outdir}all_scafstats_", run_name, ".csv"))
+write.csv(top_hit, paste0("~${params.outdir}topHit_scafstats_", run_name, ".csv"))
