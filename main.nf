@@ -147,7 +147,6 @@ if(params.runName != false) {
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 def hrvheader() {
-    
     return """
     """.stripIndent()
 }
@@ -184,6 +183,125 @@ log.info "______________________________________________________________________
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
+if(params.skipTrimming != false) {
+if (params.singleEnd) {
+/*
+ * STEP 1: Map reads to HPV-ALL Multi-Fasta
+ * Trimming of low quality and short NGS sequences.
+ */
+process Mapping {
+    container "docker.io/paulrkcruz/hrv-pipeline:latest" 
+    // errorStrategy 'retry'
+    // maxRetries 3
+    // echo true
+
+    input: 
+        file R1 from input_read_ch
+        file REF_HPV_ALL_FASTA from REF_HPV_ALL
+        file REF_HPV_HIGHRISK_FASTA from REF_HPV_HIGHRISK
+        RUN_NAME
+
+    output:
+        tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
+        tuple val (base), file("*") into Dump_files_ch
+
+    publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
+    publishDir "${params.outdir}bbmap_stats", mode: 'copy', pattern:'*.txt*'
+    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_trim_stats.csv*'
+
+    script:
+
+    """
+    #!/bin/bash
+
+    base=`basename ${R1} ".fastq.gz"`
+    echo \$base
+
+    /usr/local/miniconda/bin/bbmap.sh in=\$base ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam threads=${task.cpus} maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
+    
+    /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
+    /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
+
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${RUN_NAME}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${RUN_NAME}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${RUN_NAME}.csv'
+
+    rm -r ${params.outdir}analysis; mkdir ${params.outdir}analysis
+
+    cp filtered_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+    cp all_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+    cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
+
+    cp ${base}_summary.csv ${base}_trim_stats.csv
+
+    """
+}
+process Analysis {
+    container "docker.io/rocker/tidyverse:latest"
+    errorStrategy 'ignore'
+    // maxRetries 3
+    // echo true
+
+    input: 
+    tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") from Mapping_files_ch
+        file MERGE_STATS_R
+        RUN_NAME
+
+    output:
+        tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
+    
+    script:
+    """
+    #!/usr/bin/env Rscript
+
+    # IMPORT LIBRARIES
+    library(tidyverse)
+
+    # SETUP VARIABLES
+    run_name <- "${RUN_NAME}"
+    threshold_filter <- 0.05
+    path <- "${params.outdir}/bbmap_stats/"
+    ext <- "_hpvAll_scafstats.txt" 
+    glob <- paste0("*",ext)
+
+    # SET PATH
+    setwd(path)
+
+    # READ BBMAP OUTPUT - SCAFFOLD STATS
+    files <- fs::dir_ls(path, glob=glob)   
+    scaf_stats <- files %>% purrr::map_dfr(read_tsv, .id = "Sample")
+
+    # SAMPLE NAMES:
+    scaf_stats\$Sample <- gsub(path, "",scaf_stats\$Sample)
+    scaf_stats\$Sample <- gsub(ext, "",scaf_stats\$Sample)
+
+    # RENAME COLUMNS:
+    colnames(scaf_stats) <- c("Sample", "Reference", "Percent Unambiguous Reads", "x", "Percent Ambiguous Reads", "x", "Unambiguous Reads", "Ambiguous Reads", "Assigned Reads", "x")
+    
+    ref_type <- str_split_fixed(scaf_stats\$Reference, "_", 2)
+    colnames(ref_type) <- c("Reference Accession", "HPV Type")
+
+    scaf_stats <- cbind(scaf_stats, ref_type)
+
+    # FILTER RELEVANT COLUMNS 
+    scaf_stats <- scaf_stats[,c(1,11,12,3,5,7,8,9)]
+
+    filtered_scaf_stats <- filter(scaf_stats, `Percent Unambiguous Reads` > threshold_filter)
+
+    top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
+
+    # WRITE CSV
+    write.csv(filtered_scaf_stats, paste0("${params.outdir}analysis/filtered_scafstats_", run_name, ".csv"))
+    write.csv(scaf_stats, paste0("${params.outdir}analysis/all_scafstats_", run_name, ".csv"))
+    write.csv(top_hit, paste0("${params.outdir}analysis/topHit_scafstats_", run_name, ".csv"))
+
+    # CHANGE NAME TO ALLOW CACHEING
+    cp ${base}_trim_stats.csv ${base}_trim_stats2.csv
+    
+    """
+}
+}
+}else{
 /*
  * STEP 1: Trim_Reads
  * Trimming of low quality and short NGS sequences.
@@ -226,8 +344,8 @@ process Trimming {
 }
 process Mapping {
     container "docker.io/paulrkcruz/hrv-pipeline:latest" 
-    errorStrategy 'retry'
-    maxRetries 3
+    // errorStrategy 'retry'
+    // maxRetries 3
     // echo true
 
     input: 
@@ -237,11 +355,12 @@ process Mapping {
         RUN_NAME
 
     output:
-        tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
+        tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
         tuple val (base), file("*") into Dump_files_ch
 
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
     publishDir "${params.outdir}bbmap_stats", mode: 'copy', pattern:'*.txt*'
+    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_trim_stats.csv*'
 
     script:
 
@@ -257,12 +376,13 @@ process Mapping {
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${RUN_NAME}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${RUN_NAME}.csv'
 
-    mkdir ${params.outdir}analysis
+    rm -r ${params.outdir}analysis; mkdir ${params.outdir}analysis
+
     cp filtered_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
     cp all_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
     cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}/analysis/
 
-    cp ${base}_summary.csv ${base}_summary2.csv
+    cp ${base}_summary.csv ${base}_trim_stats.csv
 
     """
 }
@@ -273,17 +393,14 @@ process Analysis {
     // echo true
 
     input: 
-    tuple val(base), file("${base}_summary2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") from Mapping_files_ch
+    tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") from Mapping_files_ch
         file MERGE_STATS_R
         RUN_NAME
 
     output:
-        tuple val(base), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
-
-    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_trim_stats.csv*'
+        tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_trim_stats2.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
     
     script:
-
     """
     #!/usr/bin/env Rscript
 
@@ -291,7 +408,6 @@ process Analysis {
     library(tidyverse)
 
     # SETUP VARIABLES
-    output_directory <- "${params.outdir}"
     run_name <- "${RUN_NAME}"
     threshold_filter <- 0.05
     path <- "${params.outdir}/bbmap_stats/"
@@ -311,13 +427,17 @@ process Analysis {
 
     # RENAME COLUMNS:
     colnames(scaf_stats) <- c("Sample", "Reference", "Percent Unambiguous Reads", "x", "Percent Ambiguous Reads", "x", "Unambiguous Reads", "Ambiguous Reads", "Assigned Reads", "x")
+    
     ref_type <- str_split_fixed(scaf_stats\$Reference, "_", 2)
     colnames(ref_type) <- c("Reference Accession", "HPV Type")
+
     scaf_stats <- cbind(scaf_stats, ref_type)
 
     # FILTER RELEVANT COLUMNS 
     scaf_stats <- scaf_stats[,c(1,11,12,3,5,7,8,9)]
-    filtered_scaf_stats <- filter(scaf_stats, 'Percent Unambiguous Reads' > threshold_filter) 
+
+    filtered_scaf_stats <- filter(scaf_stats, `Percent Unambiguous Reads` > threshold_filter)
+
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
     # WRITE CSV
@@ -325,9 +445,10 @@ process Analysis {
     write.csv(scaf_stats, paste0("${params.outdir}analysis/all_scafstats_", run_name, ".csv"))
     write.csv(top_hit, paste0("${params.outdir}analysis/topHit_scafstats_", run_name, ".csv"))
 
-    # OUTPUT TRIM_STATS SUMMARY
-    cp ${base}_summary2.csv ${base}_trim_stats.csv
+    # CHANGE NAME TO ALLOW CACHEING
+    cp ${base}_trim_stats.csv ${base}_trim_stats2.csv
     
     """
+}
 }
 }
