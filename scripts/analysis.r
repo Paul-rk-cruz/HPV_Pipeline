@@ -3,11 +3,17 @@
     # IMPORT LIBRARIES
     library(tidyverse)
 
+    #Get args from command line 
+    args<-(commandArgs(TRUE));
+    if(length(args)==0){
+        print("No arguments supplied.")
+    }else{
+    run_name <- args[1]
+    path <- args[2]
+    }
 
     # SETUP VARIABLES
-    run_name <- "${RUN_NAME}"
     threshold_filter <- 0.05
-    path <- "${params.outdir}/bbmap_scaf_stats/"
     ext <- "_hpvAll_scafstats.txt" 
     glob <- paste0("*",ext)
 
@@ -38,6 +44,6 @@
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
     # WRITE CSV
-    write.csv(filtered_scaf_stats, paste0("${params.outdir}analysis/filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0("${params.outdir}analysis/all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0("${params.outdir}analysis/topHit_scafstats_", run_name, ".csv"))
+    write.csv(filtered_scaf_stats, paste0(path, "analysis/filtered_scafstats_", run_name, ".csv"))
+    write.csv(scaf_stats, paste0(path, "analysis/all_scafstats_", run_name, ".csv"))
+    write.csv(top_hit, paste0(path, "analysis/topHit_scafstats_", run_name, ".csv"))
