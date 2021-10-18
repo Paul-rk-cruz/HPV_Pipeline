@@ -10,6 +10,7 @@
     }else{
     run_name <- args[1]
     path <- args[2]
+    outdir <- args[3]
     }
 
     # SETUP VARIABLES
@@ -44,6 +45,6 @@
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
     # WRITE CSV
-    write.csv(filtered_scaf_stats, paste0(path, "analysis/filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0(path, "analysis/all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0(path, "analysis/topHit_scafstats_", run_name, ".csv"))
+    write.csv(filtered_scaf_stats, paste0(outdir, "analysis/filtered_scafstats_", run_name, ".csv"))
+    write.csv(scaf_stats, paste0(outdir, "analysis/all_scafstats_", run_name, ".csv"))
+    write.csv(top_hit, paste0(outdir, "analysis/topHit_scafstats_", run_name, ".csv"))

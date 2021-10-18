@@ -202,12 +202,14 @@ process Mapping_skipTrim {
         RUN_NAME
 
     output:
-        tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Mapping_files_ch
+        tuple val(base), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") into Mapping_files_ch
+        file("${base}_hpvAll_scafstats.txt") into Bbmap_scaf_stats_ch
+        // tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch        
         tuple val (base), file("*") into Dump_files_ch
 
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
-    publishDir "${params.outdir}bbmap_stats", mode: 'copy', pattern:'*.txt*'
-    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*_trim_stats.csv*'
+    publishDir "${params.outdir}bbmap_scaf_stats", mode: 'copy', pattern:'*_hpvAll_scafstats.txt*'
+    publishDir "${params.outdir}bbmap_cov_stats", mode: 'copy', pattern:'*_hpvAll_covstats.txt*'    
 
     script:
 
@@ -238,66 +240,24 @@ process Mapping_skipTrim {
 }
 process Analysis_skipTrim {
     container "docker.io/rocker/tidyverse:latest"
-    errorStrategy 'ignore'
+    // errorStrategy 'ignore'
     // maxRetries 3
     // echo true
 
-    input: 
-    tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") from Mapping_files_ch
-        file MERGE_STATS_R
-        RUN_NAME
+    input:
+    file("${base}_hpvAll_scafstats.txt") from Bbmap_scaf_stats_ch.collect()     
+    // tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") from Mapping_files_ch
+    file MERGE_STATS_R
+    RUN_NAME
 
-    output:
-        tuple val(base), file("*.trimmed.fastq.gz"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll_scafstats.txt") into Analysis_ch
-    
+    // output:
+    // tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") into Analysis_ch
+
     script:
     """
-    #!/usr/bin/env Rscript
 
-    # IMPORT LIBRARIES
-    library(tidyverse)
-
-    # SETUP VARIABLES
-    run_name <- "${RUN_NAME}"
-    threshold_filter <- 0.05
-    path <- "${params.outdir}/bbmap_stats/"
-    ext <- "_hpvAll_scafstats.txt" 
-    glob <- paste0("*",ext)
-
-    # SET PATH
-    setwd(path)
-
-    # READ BBMAP OUTPUT - SCAFFOLD STATS
-    files <- fs::dir_ls(path, glob=glob)   
-    scaf_stats <- files %>% purrr::map_dfr(read_tsv, .id = "Sample")
-
-    # SAMPLE NAMES:
-    scaf_stats\$Sample <- gsub(path, "",scaf_stats\$Sample)
-    scaf_stats\$Sample <- gsub(ext, "",scaf_stats\$Sample)
-
-    # RENAME COLUMNS:
-    colnames(scaf_stats) <- c("Sample", "Reference", "Percent Unambiguous Reads", "x", "Percent Ambiguous Reads", "x", "Unambiguous Reads", "Ambiguous Reads", "Assigned Reads", "x")
-    
-    ref_type <- str_split_fixed(scaf_stats\$Reference, "_", 2)
-    colnames(ref_type) <- c("Reference Accession", "HPV Type")
-
-    scaf_stats <- cbind(scaf_stats, ref_type)
-
-    # FILTER RELEVANT COLUMNS 
-    scaf_stats <- scaf_stats[,c(1,11,12,3,5,7,8,9)]
-
-    filtered_scaf_stats <- filter(scaf_stats, `Percent Unambiguous Reads` > threshold_filter)
-
-    top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
-
-    # WRITE CSV
-    write.csv(filtered_scaf_stats, paste0("${params.outdir}analysis/filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0("${params.outdir}analysis/all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0("${params.outdir}analysis/topHit_scafstats_", run_name, ".csv"))
-
-    # CHANGE NAME TO ALLOW CACHEING
-    cp ${base}_trim_stats.csv ${base}_trim_stats2.csv
-    
+    ls -latr
+    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}\'
     """
 }
 }
@@ -375,18 +335,6 @@ process Mapping {
     samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
     samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
 
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${RUN_NAME}.csv'
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${RUN_NAME}.csv'
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${RUN_NAME}.csv'
-
-    if [ ! -d ${params.outdir}analysis ]; then
-    mkdir -p ${params.outdir}analysis;
-    fi;
-
-    cp filtered_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
-    cp all_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
-    cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
-
     cp ${base}_summary.csv ${base}_trim_stats.csv
 
     """
@@ -409,8 +357,20 @@ process Analysis {
     script:
     """
 
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${RUN_NAME}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${RUN_NAME}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${RUN_NAME}.csv'
+
+    if [ ! -d ${params.outdir}analysis ]; then
+    mkdir -p ${params.outdir}analysis;
+    fi;
+
+    cp filtered_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
+    cp all_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
+    cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
+    
     ls -latr
-    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}\'
+    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}bbmap_scaf_stats/\' \'${params.outdir}\'
     """
 }
 }
