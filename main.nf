@@ -186,11 +186,11 @@ log.info "______________________________________________________________________
 if(params.skipTrimming != false) {
 if (params.singleEnd) {
 /*
- * STEP 1: Map reads to HPV-ALL Multi-Fasta
- * Trimming of low quality and short NGS sequences.
+ * STEP 1: Align reads to HPV-ALL Multi-Fasta
+ * Map NGS reads to HPV-ALL multifasta.
  */
-process Mapping_skipTrim {
-    container "docker.io/paulrkcruz/hrv-pipeline:latest" 
+process Aligning_skipTrim {
+    container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
@@ -202,9 +202,9 @@ process Mapping_skipTrim {
         RUN_NAME
 
     output:
-        tuple val(base), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") into Mapping_files_ch
+        tuple val(base), file("${base}_summary.csv"), file("${base}_hpvAll.sam") into Aligning_ch
         file("${base}_hpvAll_scafstats.txt") into Bbmap_scaf_stats_ch
-        // tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch        
+        tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch   
         tuple val (base), file("*") into Dump_files_ch
 
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
@@ -219,15 +219,54 @@ process Mapping_skipTrim {
     base=`basename ${R1} ".fastq.gz"`
     echo \$base
 
-    /usr/local/miniconda/bin/bbmap.sh in=\$base ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam threads=${task.cpus} maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
-    
-    /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
-    /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
+    /usr/local/bin/bbmap.sh -Xmx20g in=\$base ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam threads=${task.cpus} maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
 
-    cp ${base}_summary.csv ${base}_trim_stats.csv
+    echo Sample_Name, Mean_coverage, Bam_Size> \$base'_summary.csv'
+    printf "\$base" >> \$base'_summary.csv'
+    ls -latr
 
     """
 }
+/*
+ * STEP 2: Bam_Sorting
+ * Sort bam file and collect summary statistics.
+ */
+process Bam_Sorting_skipTrim { 
+    container "quay.io/greninger-lab/swift-pipeline:latest"
+    // errorStrategy 'retry'
+    // maxRetries 3
+    // echo true
+
+    input:
+      tuple val(base), file("${base}_summary.csv"), file("${base}_hpvAll.sam") from Aligning_ch
+    output:
+      tuple val(base), file("${base}_hpvAll.sam"), file("${base}_hpvAll.sorted.bam"), file("${base}_stats.csv")  into Analysis_ch   
+
+    publishDir "${params.outdir}sample_stats", mode: 'copy', pattern:'*_trim_stats.csv*'
+    publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
+
+    script:
+    """
+    #!/bin/bash
+
+    /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
+    /usr/local/miniconda/bin/samtools -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
+    /usr/local/miniconda/bin/samtools index ${base}_hpvAll.sorted.bam
+    /usr/local/miniconda/bin/bedtools genomecov -d -ibam ${base}_hpvAll.sorted.bam > ${base}_coverage.txt
+    meancoverage=\$(cat ${base}_coverage.txt | awk '{sum+=\$3} END { print sum/NR}')
+    bamsize=\$((\$(wc -c ${base}_hpvAll.sorted.bam | awk '{print \$1'})+0))
+    echo "bamsize: \$bamsize"
+
+    cp ${base}_summary.csv ${base}_stats.csv
+    printf ",\$meancoverage,\$bamsize" >> ${base}_stats.csv
+
+
+    """
+}
+/*
+ * STEP 3: Mapping
+ * Map NGS Sequence reads to HPV-ALL multifasta
+ */
 process Analysis_skipTrim {
     container "docker.io/rocker/tidyverse:latest"
     // errorStrategy 'ignore'
@@ -281,7 +320,7 @@ process Trimming {
         val MINLEN
 
     output:
-        tuple env(base),file("*.trimmed.fastq.gz"), file("${R1}_num_trimmed.txt"),file("*summary.csv") into Trim_out_SE, Trim_out_SE_FQC
+        tuple env(base),file("*.trimmed.fastq.gz"), file("${R1}_num_trimmed.txt"),file("*summary.csv") into Trimming_ch
 
     publishDir "${params.outdir}trimmed_fastqs", mode: 'copy',pattern:'*.trimmed.fastq*'
 
@@ -298,49 +337,88 @@ process Trimming {
     num_trimmed=\$((\$(gunzip -c \$base'.trimmed.fastq.gz' | wc -l)/4))
     printf "\$num_trimmed" >> ${R1}_num_trimmed.txt
     percent_trimmed=\$((100-\$((100*num_trimmed/num_untrimmed))))
-    echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed> \$base'_summary.csv'
+    echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed, Mean_coverage, Bam_Size> \$base'_summary.csv'
     printf "\$base,\$num_untrimmed,\$num_trimmed,\$percent_trimmed" >> \$base'_summary.csv'
     ls -latr
 
     """
 }
-process Mapping {
-    // container "docker.io/paulrkcruz/hrv-pipeline:latest" 
+/*
+ * STEP 2: Aligning
+ * Align NGS Sequence reads to HPV-ALL multifasta
+ */
+process Aligning {
+    container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
 
     input: 
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_summary.csv") from Trim_out_SE
+        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_summary.csv") from Trimming_ch
         file REF_HPV_ALL_FASTA from REF_HPV_ALL
         file REF_HPV_HIGHRISK_FASTA from REF_HPV_HIGHRISK
         RUN_NAME
 
     output:
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") into Mapping_files_ch
+        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sam") into Aligning_ch
         file("${base}_hpvAll_scafstats.txt") into Bbmap_scaf_stats_ch
-        // tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch        
+        tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch   
         tuple val (base), file("*") into Dump_files_ch
 
-    publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
     publishDir "${params.outdir}bbmap_scaf_stats", mode: 'copy', pattern:'*_hpvAll_scafstats.txt*'
     publishDir "${params.outdir}bbmap_cov_stats", mode: 'copy', pattern:'*_hpvAll_covstats.txt*'    
-    publishDir "${params.outdir}trim_stats", mode: 'copy', pattern:'*_trim_stats.csv*'
 
     script:
 
     """
     #!/bin/bash
 
-    bbmap.sh -Xmx20g in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best
+    /usr/local/bin/bbmap.sh -Xmx20g in=${base}.trimmed.fastq.gz ref=${REF_HPV_HIGHRISK_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best
 
-    samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
-    samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
-
-    cp ${base}_summary.csv ${base}_trim_stats.csv
+    cp ${base}_summary.csv ${base}_stats.csv
 
     """
 }
+/*
+ * STEP 2: Bam_Sorting
+ * Sort bam file and collect summary statistics.
+ */
+process Bam_Sorting { 
+    container "quay.io/greninger-lab/swift-pipeline:latest"
+    // errorStrategy 'retry'
+    // maxRetries 3
+    // echo true
+
+    input:
+      tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sam") from Aligning_ch
+    output:
+      tuple val(base), file("${base}_hpvAll.sam"), file("${base}_hpvAll.sorted.bam"), file("${base}_stats.csv")  into Analysis_ch   
+
+    publishDir "${params.outdir}sample_stats", mode: 'copy', pattern:'*_stats.csv*'
+    publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
+
+    script:
+    """
+    #!/bin/bash
+
+    /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
+    /usr/local/miniconda/bin/samtools -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
+    /usr/local/miniconda/bin/samtools index ${base}_hpvAll.sorted.bam
+    /usr/local/miniconda/bin/bedtools genomecov -d -ibam ${base}_hpvAll.sorted.bam > ${base}_coverage.txt
+    meancoverage=\$(cat ${base}_coverage.txt | awk '{sum+=\$3} END { print sum/NR}')
+    bamsize=\$((\$(wc -c ${base}_hpvAll.sorted.bam | awk '{print \$1'})+0))
+    echo "bamsize: \$bamsize"
+
+    cp ${base}_trim_stats.csv ${base}_stats.csv
+    printf ",\$meancoverage,\$bamsize" >> ${base}_stats.csv
+
+
+    """
+}
+/*
+ * STEP 4: Analysis
+ * Analysis summary creation utilizing R script.
+ */
 process Analysis {
     container "docker.io/rocker/tidyverse:latest"
     // errorStrategy 'ignore'
