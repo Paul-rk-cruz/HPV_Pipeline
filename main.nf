@@ -73,8 +73,8 @@ params.TRAILING = "3"
 TRAILING = "3"
 params.SWINDOW = "4:20"
 SWINDOW = "4:20"
-params.MINLEN = "35"
-MINLEN = "35"
+params.MINLEN = "75"
+MINLEN = "75"
 // Setup Parameters to default values
 params.skipTrimming = false
 params.singleEnd = false
@@ -332,7 +332,7 @@ process Mapping {
     """
     #!/bin/bash
 
-    bbmap.sh -Xmx20g in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best interleaved=false
+    bbmap.sh -Xmx20g in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best
 
     samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
     samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
