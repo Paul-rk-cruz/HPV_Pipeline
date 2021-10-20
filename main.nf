@@ -31,7 +31,7 @@ version = '1.0'
 def helpMsg() {
     log.info"""
 	 _______________________________________________________________________________
-     Human Rhinovirus Genome Mapping Pipeline :  Version ${version}
+     Human Papilloma Virus Pipeline :  Version ${version}
 	________________________________________________________________________________
     
 	Pipeline Usage:
@@ -43,17 +43,6 @@ def helpMsg() {
       --outdir                      The output directory where the results will be saved
     OPTIONAL:
       --skipTrimming                Skips the fastq trimmming process   
-    """.stripIndent()
-}
-def nfcoreHeader() {
-
-    return """
- _   _ ______     __  ____  _             _ 
-| | | |  _ \ \   / / |  _ \| |     __   _/ |
-| |_| | |_) \ \ / /  | |_) | |     \ \ / / |
-|  _  |  __/ \ V /   |  __/| |___   \ V /| |
-|_| |_|_|     \_/    |_|   |_____|   \_/ |_|
-
     """.stripIndent()
 }
 // Show help msg
