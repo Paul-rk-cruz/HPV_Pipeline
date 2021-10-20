@@ -28,6 +28,7 @@
 ////////////////////////////////////////////////////////
 // Pipeline version
 version = '1.0'
+params.helpMsg = false
 def helpMsg() {
     log.info"""
 	 _______________________________________________________________________________
@@ -83,7 +84,6 @@ MINLEN = "75"
 // Setup Parameters to default values
 params.skipTrimming = false
 params.singleEnd = false
-params.helpMsg = false
 params.runName = false
 params.ADAPTERS_PE = false
 ////////////////////////////////////////////////////////
