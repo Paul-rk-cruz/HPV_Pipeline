@@ -190,7 +190,7 @@ if (params.singleEnd) {
  * Align NGS reads to HPV-ALL multifasta.
  */
 process Aligning_skipTrim {
-    container "docker.io/autamus/bbmap:latest"
+    container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
@@ -205,21 +205,18 @@ process Aligning_skipTrim {
         tuple env(base), file("${base}_hpvAll.sam") into Aligning_ch
         file("${base}_hpvAll_scafstats.txt") into Bbmap_scaf_stats_ch
         tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch   
-        tuple val (base), file("*") into Dump_files_ch
 
-    publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
     publishDir "${params.outdir}bbmap_scaf_stats", mode: 'copy', pattern:'*_hpvAll_scafstats.txt*'
     publishDir "${params.outdir}bbmap_cov_stats", mode: 'copy', pattern:'*_hpvAll_covstats.txt*'    
 
     script:
-
     """
     #!/bin/bash
 
     base=`basename ${R1} ".fastq.gz"`
     echo \$base
 
-    /usr/local/bin/bbmap.sh -Xmx20g in=\$base ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=nope.sam threads=${task.cpus} maxindel=9 ambiguous=best covstats=${base}_hpvAll_covstats.txt scafstats=${base}_hpvAll_scafstats.txt
+    /usr/local/bin/bbmap.sh in=${R1} ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best threads=${task.cpus} -Xmx10g
 
     """
 }
@@ -238,7 +235,7 @@ process Bam_Sorting_skipTrim {
     output:
       tuple val(base), file("${base}_hpvAll.sam"), file("${base}_hpvAll.sorted.bam") into Analysis_ch   
 
-    publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
+    publishDir "${params.outdir}bam_sorted_skipTrim", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
 
     script:
     """
@@ -260,13 +257,9 @@ process Analysis_skipTrim {
     // echo true
 
     input:
-    file("${base}_hpvAll_scafstats.txt") from Bbmap_scaf_stats_ch.collect()     
-    // tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") from Mapping_files_ch
+    file("${base}_hpvAll_scafstats.txt") from Bbmap_scaf_stats_ch.collect()
     file MERGE_STATS_R
     RUN_NAME
-
-    // output:
-    // tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") into Analysis_ch
 
     script:
     """
@@ -284,7 +277,7 @@ process Analysis_skipTrim {
     cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
 
     ls -latr
-    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}bbmap_scaf_stats/\' \'${params.outdir}\'
+    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}\' \'${params.outdir}\'
     """
 }
 }
@@ -334,7 +327,7 @@ process Trimming {
  * Align NGS Sequence reads to HPV-ALL multifasta
  */
 process Aligning {
-    // container "docker.io/autamus/bbmap:latest"
+    container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
@@ -348,8 +341,7 @@ process Aligning {
     output:
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam") into Aligning_ch
         tuple val(base), file("${base}_hpvAll_scafstats.txt") into Bbmap_scaf_stats_ch
-        tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch   
-        tuple val (base), file("*") into Dump_files_ch
+        tuple val(base), file("${base}_hpvAll_covstats.txt") into Bbmap_cov_stats_ch
 
     publishDir "${params.outdir}bbmap_scaf_stats", mode: 'copy', pattern:'*_hpvAll_scafstats.txt*'
     publishDir "${params.outdir}bbmap_cov_stats", mode: 'copy', pattern:'*_hpvAll_covstats.txt*'    
@@ -359,7 +351,7 @@ process Aligning {
     """
     #!/bin/bash
 
-    bbmap.sh -Xmx20g in=${base}.trimmed.fastq.gz ref=${REF_HPV_HIGHRISK_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best threads=${task.cpus}
+    /usr/local/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best threads=${task.cpus} -Xmx10g
 
     cp ${base}_summary.csv ${base}_stats1.csv
 
@@ -406,12 +398,8 @@ process Analysis {
 
     input:
     file("${base}_hpvAll_scafstats.txt") from Bbmap_scaf_stats_ch.collect()     
-    // tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") from Mapping_files_ch
     file MERGE_STATS_R
     RUN_NAME
-
-    // output:
-    // tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_trim_stats.csv"), file("${base}_hpvAll.sorted.bam"), file("${base}_hpvAll_covstats.txt") into Analysis_ch
 
     script:
     """
@@ -429,7 +417,7 @@ process Analysis {
     cp topHit_scafstats_${RUN_NAME}.csv ${params.outdir}analysis/
 
     ls -latr
-    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}bbmap_scaf_stats/\' \'${params.outdir}\'
+    Rscript --vanilla ${MERGE_STATS_R} \'${RUN_NAME}' \'${params.outdir}\' \'${params.outdir}\'
     """
 }
 }
