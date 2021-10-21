@@ -82,6 +82,7 @@ SWINDOW = "4:20"
 params.MINLEN = "75"
 MINLEN = "75"
 // Setup Parameters to default values
+params.ref = false
 params.skipTrimming = false
 params.singleEnd = false
 params.runName = false
@@ -93,8 +94,19 @@ params.ADAPTERS_PE = false
 /*                                                    */
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
-REF_HPV_ALL = file("${baseDir}/ref_fasta/hpvAll.fasta")
-REF_HPV_HIGHRISK = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
+if(params.ref == "all") {
+    REF_HPV = file("${baseDir}/ref_fasta/hpvAll.fasta")
+} else if(params.ref == "highRisk") {
+    REF_HPV = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
+} else {
+if(params.ref != true) {
+    print("\nERROR: Reference multifasta type must be specified.\n\nOPTIONS:\n\n--ref all\n--ref highRisk\n")
+}
+}
+// Setup Run Name
+if(params.runName != false) {
+    RUN_NAME = params.runName
+}
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 /*                                                    */
@@ -135,10 +147,6 @@ if(params.singleEnd == false) {
         .ifEmpty { error "> Cannot locate single-end reads in: ${params.reads}.\n> Please enter a valid file path." }
         .map { it -> file(it)}
 }
-// Setup Run Name
-if(params.runName != false) {
-    RUN_NAME = params.runName
-}
 ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////
 /*                                                    */
@@ -163,6 +171,7 @@ summary['Input directory path:']               = params.reads
 summary['Output directory path:']          = params.outdir
 summary['Work directory path:']         = workflow.workDir
 summary['Sequence type:']           	  = params.singleEnd ? 'Single-End' : 'Paired-End'
+summary['Reference type:']           	  = params.ref
 if(workflow.revision) summary['Pipeline Release'] = workflow.revision
 if (params.singleEnd) {
 summary['Trimmomatic adapters:'] = params.ADAPTERS_SE
@@ -332,10 +341,9 @@ process Aligning {
     // maxRetries 3
     // echo true
 
-    input: 
+    input:
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_num_trimmed.txt"), file("${base}_summary.csv") from Trimming_ch
-        file REF_HPV_ALL_FASTA from REF_HPV_ALL
-        file REF_HPV_HIGHRISK_FASTA from REF_HPV_HIGHRISK
+        file REF_HPV
         RUN_NAME
 
     output:
@@ -351,7 +359,7 @@ process Aligning {
     """
     #!/bin/bash
 
-    /usr/local/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV_ALL_FASTA} outm=${base}_hpvAll.sam outu=${base}_nope.sam scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best threads=${task.cpus} -Xmx10g
+    /usr/local/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV} outm=${base}_hpvAll.sam outu=${base}_nope.sam scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best threads=${task.cpus} -Xmx10g
 
     cp ${base}_summary.csv ${base}_stats1.csv
 
