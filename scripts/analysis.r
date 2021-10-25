@@ -20,11 +20,11 @@
     scaf_path <- paste0(path,"bbmap_scaf_stats/") #folder containing scaf stats
     scaf_ext <- "_R1_hpvAll_scafstats.txt" #scafstats file name extension
     glob_scaf <- paste0("*",scaf_ext)
-
     # DIRECTORY CONTAINING COV STATS
     cov_path <- paste0(path,"bbmap_cov_stats/") #folder containing coverage stats
     cov_ext <- "_R1_hpvAll_covstats.txt" #covstats file name extension
     glob_cov <- paste0("*",cov_ext)
+
 
     # READ BBMAP OUTPUT/SCAFFOLD STATS AND MERGE
     scaf_files <- fs::dir_ls(scaf_path, glob=glob_scaf)   
@@ -51,7 +51,6 @@
 
     # MERGE SCAF & COV STATS
     # first paste sample name and ref to make unique key on each:
-
     scaf_stats$key <- paste0(scaf_stats$Sample, "_", scaf_stats$Reference)
     cov_stats$key <- paste0(cov_stats$Sample, "_", cov_stats$Reference)
 
