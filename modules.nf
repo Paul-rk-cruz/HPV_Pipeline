@@ -49,15 +49,15 @@ process Aligning {
     // container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
     // errorStrategy 'retry'
     // maxRetries 3
-    // echo true
+    echo true
 
     input:
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_summary.csv")// from Trimming_ch
         file REF_HPV
 
     output:
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// into Aligning_ch
-
+        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// into Align_ch
+    
     publishDir "${params.outdir}bbmap_scaf_stats", mode: 'copy', pattern:'*_hpvAll_scafstats.txt*'
     publishDir "${params.outdir}bbmap_cov_stats", mode: 'copy', pattern:'*_hpvAll_covstats.txt*'    
 
@@ -66,10 +66,10 @@ process Aligning {
     """
     #!/bin/bash
 
-    bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV} outm=${base}_hpvAll.sam outu=${base}_nope.sam scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt maxindel=9 ambiguous=best threads=${task.cpus} -Xmx6g > bbmap_out.txt 2>&1 
+    bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV} outm=${base}_hpvAll.sam outu=${base}_nope.sam maxindel=9 ambiguous=best threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt -Xmx6g > bbmap_out.txt 2>&1 
 
     cp ${base}_summary.csv ${base}_stats1.csv
-    
+
     """
 }
 // /usr/local/bin/bbmap.sh
@@ -84,9 +84,10 @@ process Bam_Sorting {
     // echo true
 
     input:
-      tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Aligning_ch
+        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Align_ch
+
     output:
-      tuple val(base), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")//  into Analysis_ch   
+        tuple val(base), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")//  into Analysis_ch   
 
     publishDir "${params.outdir}trim_stats", mode: 'copy', pattern:'*_trim_stats.csv*'
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
