@@ -108,18 +108,22 @@ process Bam_Sorting {
  * Analysis summary creation utilizing R script.
  */
 process Analysis {
-    container "docker.io/rocker/tidyverse:latest"
+    container "docker.io/cgrlab/tidyverse:latest"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
 
     input:
     file("${base}_hpvAll_scafstats.txt")// from Bbmap_scaf_stats_ch.collect()     
+    file("${base}_hpvAll_covstats.txt")// from Bbmap_cov_stats_ch.collect()   
     file MERGE_STATS_R
     val runName
 
     script:
     """
+    #!/bin/bash
+
+    ls -latr
 
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${runName}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${runName}.csv'
@@ -133,7 +137,6 @@ process Analysis {
     cp all_scafstats_${runName}.csv ${params.outdir}analysis/
     cp topHit_scafstats_${runName}.csv ${params.outdir}analysis/
 
-    ls -latr
-    Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'${params.outdir}\' \'${params.outdir}\'
+    Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'${params.outdir}\'
     """
 }

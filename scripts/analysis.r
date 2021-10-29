@@ -10,7 +10,6 @@
     }else{
     run_name <- args[1]
     path <- args[2]
-    outdir <- args[3]
     }
 
     # SETUP VARIABLES
@@ -24,7 +23,6 @@
     cov_path <- paste0(path,"bbmap_cov_stats/") #folder containing coverage stats
     cov_ext <- "_R1_hpvAll_covstats.txt" #covstats file name extension
     glob_cov <- paste0("*",cov_ext)
-
 
     # READ BBMAP OUTPUT/SCAFFOLD STATS AND MERGE
     scaf_files <- fs::dir_ls(scaf_path, glob=glob_scaf)   
@@ -72,6 +70,6 @@
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
     # WRITE CSV FILES TO ANALYSIS DIRECTORY
-    write.csv(filtered_scaf_stats, paste0(outdir, "analysis/filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0(outdir, "analysis/all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0(outdir, "analysis/topHit_scafstats_", run_name, ".csv"))
+    write.csv(filtered_scaf_stats, paste0(path, "analysis/filtered_scafstats_", run_name, ".csv"))
+    write.csv(scaf_stats, paste0(path, "analysis/all_scafstats_", run_name, ".csv"))
+    write.csv(top_hit, paste0(path, "analysis/topHit_scafstats_", run_name, ".csv"))

@@ -1,0 +1,30 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2580
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww10180\viewh9820\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 -------------------------------------------------------------------------------------------------------------------\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 				Human Papilloma Virus Pipeline v1.0\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 -------------------------------------------------------------------------------------------------------------------\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 Command-line syntax to launch Bioinformatic Pipeline\
+\
+PARAMETERS, FILE & DIRECTORY PATHS:\
+\
+PATH_PIPELINE		Path to pipeline in local directory.\
+PATH_INPUT		Path to input directory containing fastq.gz files.\
+PATH_OUTPUT		Path to pipeline file output directory.\
+RUN_NAME			Sets the run name.\
+REF				Sets HPV multiifasta to \'91all\'92 OR \'91highRisk\'92.\
+\
+\
+LOCAL:\
+nextflow run PATH_PIPELINE/HPV_Pipeline/main.nf --input 'PATH_INPUT/\'91 --outdir 'PATH_OUTPUT/\'91 --runName \'91RUN_NAME\'92 --ref \'91REF\'92 -with-trace -with-timeline -with-report PATH_OUTPUT/report.html --singleEnd -resume\
+\
+CLOUD:\
+nextflow run PATH_PIPELINE/HPV_Pipeline/main.nf --input 'PATH_INPUT/' --outdir 'PATH_OUTPUT/\'91 --runName \'91RUN_NAME' --ref \'91REF\'92 -with-docker ubuntu:18.04 -with-trace -with-timeline -with-report PATH_OUTPUT/report.html -c PATH_PIPELINE/HPV_Pipeline/config/nextflow.config -profile cloud_big -with-tower --singleEnd -resume\
+}
