@@ -1,0 +1,20 @@
+----------------------------------------------------------------------------------------------------------------
+ 				Human Papilloma Virus Pipeline v1.0
+-------------------------------------------------------------------------------------------------------------------
+Command-line syntax to launch Bioinformatic Pipeline
+
+PARAMETERS, FILE & DIRECTORY PATHS:
+
+PATH_PIPELINE		Path to pipeline in local directory.
+PATH_INPUT		Path to input directory containing fastq.gz files.
+PATH_OUTPUT		Path to pipeline file output directory.
+RUN_NAME			Sets the run name.
+REF				Sets HPV multiifasta to 'all' OR 'highRisk'
+
+
+LOCAL:
+nextflow run PATH_PIPELINE/HPV_Pipeline/main.nf --input 'PATH_INPUT/' --outdir 'PATH_OUTPUT/' --runName 'RUN_NAME/' --ref 'REF/' -with-trace -with-timeline -with-report PATH_OUTPUT/report.html --singleEnd -resume
+
+IN TESTING:
+CLOUD:
+nextflow run PATH_PIPELINE/HPV_Pipeline/main.nf --input 'PATH_INPUT/' --outdir 'PATH_OUTPUT/' --runName 'RUN_NAME/' --ref 'REF/' -with-docker ubuntu:18.04 -with-trace -with-timeline -with-report PATH_OUTPUT/report.html -c PATH_PIPELINE/HPV_Pipeline/config/nextflow.config -profile cloud_big -with-tower --singleEnd -resume

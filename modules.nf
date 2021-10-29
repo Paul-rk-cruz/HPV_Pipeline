@@ -108,7 +108,7 @@ process Bam_Sorting {
  * Analysis summary creation utilizing R script.
  */
 process Analysis {
-    container "docker.io/cgrlab/tidyverse:latest"
+    container "docker.io/rocker/tidyverse:latest"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
