@@ -19,6 +19,7 @@
     scaf_path <- paste0(path,"bbmap_scaf_stats/") #folder containing scaf stats
     scaf_ext <- "_R1_hpvAll_scafstats.txt" #scafstats file name extension
     glob_scaf <- paste0("*",scaf_ext)
+
     # DIRECTORY CONTAINING COV STATS
     cov_path <- paste0(path,"bbmap_cov_stats/") #folder containing coverage stats
     cov_ext <- "_R1_hpvAll_covstats.txt" #covstats file name extension

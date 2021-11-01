@@ -187,7 +187,6 @@ workflow {
     )
     Analysis (
         Aligning.out[0].collect(),
-        Aligning.out[1].collect(),
         MERGE_STATS_R,
         params.runName
     )

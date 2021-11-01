@@ -87,7 +87,7 @@ process Bam_Sorting {
         tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Align_ch
 
     output:
-        tuple val(base), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")//  into Analysis_ch   
+        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")//  into Analysis_ch   
 
     publishDir "${params.outdir}trim_stats", mode: 'copy', pattern:'*_trim_stats.csv*'
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
@@ -114,8 +114,7 @@ process Analysis {
     // echo true
 
     input:
-    file("${base}_hpvAll_scafstats.txt")// from Bbmap_scaf_stats_ch.collect()     
-    file("${base}_hpvAll_covstats.txt")// from Bbmap_cov_stats_ch.collect()   
+    tuple val(base), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Bbmap_scaf_stats_ch.collect()     
     file MERGE_STATS_R
     val runName
 
@@ -123,12 +122,10 @@ process Analysis {
     """
     #!/bin/bash
 
-    ls -latr
-
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${runName}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${runName}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${runName}.csv'
-
+    
     if [ ! -d ${params.outdir}analysis ]; then
     mkdir -p ${params.outdir}analysis;
     fi;
@@ -137,6 +134,7 @@ process Analysis {
     cp all_scafstats_${runName}.csv ${params.outdir}analysis/
     cp topHit_scafstats_${runName}.csv ${params.outdir}analysis/
 
-    Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'${params.outdir}\'
+    ls -latr
+    Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'${params.outdir}\' \'${params.outdir}\'
     """
 }
