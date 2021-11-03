@@ -63,7 +63,7 @@
 
     scaf_stats <- cbind(scaf_stats, ref_type)
 
-    # FILTER RELEVANT COLUMNS
+    #Filter Relevant Columns 
     scaf_stats <- scaf_stats[,c(1,24,25,3,5,7,8,9,14,22,17)]
 
     filtered_scaf_stats <- filter(scaf_stats, `Percent Unambiguous Reads` > threshold_filter) 
@@ -71,6 +71,19 @@
     top_hit <- scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
 
     # WRITE CSV FILES TO ANALYSIS DIRECTORY
-    write.csv(filtered_scaf_stats, paste0(path, "analysis/filtered_scafstats_", run_name, ".csv"))
-    write.csv(scaf_stats, paste0(path, "analysis/all_scafstats_", run_name, ".csv"))
-    write.csv(top_hit, paste0(path, "analysis/topHit_scafstats_", run_name, ".csv"))
+    # write.csv(filtered_scaf_stats, paste0(path, "analysis/filtered_scafstats_", run_name, ".csv"))
+    # write.csv(scaf_stats, paste0(path, "analysis/all_scafstats_", run_name, ".csv"))
+    # write.csv(top_hit, paste0(path, "analysis/topHit_scafstats_", run_name, ".csv"))
+
+    # Filter for only High Risk HPV results: 
+
+    HR_HPV <- c("HPV16", "HPV18", "HPV31", "HPV33", "HPV35", "HPV39", "HPV45", "HPV51", "HPV52", "HPV56", "HPV58", "HPV59", "HPV66", "HPV68", "HPV68a")
+
+    HR_scaf_stats <- filter(scaf_stats, `HPV Type` %in% HR_HPV) 
+    HR_filtered_scaf_stats <- filter(filtered_scaf_stats, `HPV Type` %in% HR_HPV)
+    HR_top_hit <- HR_scaf_stats %>% group_by(Sample) %>% filter(row_number()==1)
+
+    # WRITE CSV FILES TO ANALYSIS DIRECTORY
+    write.csv(HR_filtered_scaf_stats, paste0(path, "analysis/HR_filtered_scafstats_", run_name, ".csv"))
+    write.csv(HR_scaf_stats, paste0(path, "analysis/HR_all_scafstats_", run_name, ".csv"))
+    write.csv(HR_top_hit, paste0(path, "analysis/HR_topHit_scafstats_", run_name, ".csv"))

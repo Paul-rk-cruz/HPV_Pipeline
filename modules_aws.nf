@@ -46,7 +46,7 @@ process Trimming {
  * Align NGS Sequence reads to HPV-ALL multifasta
  */
 process Aligning {
-    // container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
+    container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
     // errorStrategy 'retry'
     // maxRetries 3
     echo true
@@ -66,7 +66,7 @@ process Aligning {
     """
     #!/bin/bash
 
-    bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV} outm=${base}_hpvAll.sam outu=${base}_nope.sam maxindel=9 ambiguous=best threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt -Xmx6g > bbmap_out.txt 2>&1 
+    /usr/local/bin/bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV} outm=${base}_hpvAll.sam outu=${base}_nope.sam maxindel=9 ambiguous=best threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt -Xmx6g > bbmap_out.txt 2>&1 
 
     cp ${base}_summary.csv ${base}_stats1.csv
 
@@ -122,14 +122,10 @@ process Analysis {
     """
     #!/bin/bash
 
-    # echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${runName}.csv'
-    # echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${runName}.csv'
-    # echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${runName}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${runName}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${runName}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${runName}.csv'
     
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_filtered_scafstats_${runName}.csv'
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_all_scafstats_${runName}.csv'
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_topHit_scafstats_${runName}.csv'
-
     if [ ! -d ${params.outdir}analysis ]; then
     mkdir -p ${params.outdir}analysis;
     fi;
