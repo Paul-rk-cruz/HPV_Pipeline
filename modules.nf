@@ -133,7 +133,7 @@ process Analysis {
     if [ ! -d ${params.outdir}analysis ]; then
     mkdir -p ${params.outdir}analysis;
     fi;
-
+    
     cp filtered_scafstats_${runName}.csv ${params.outdir}analysis/
     cp all_scafstats_${runName}.csv ${params.outdir}analysis/
     cp topHit_scafstats_${runName}.csv ${params.outdir}analysis/
