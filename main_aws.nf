@@ -99,7 +99,7 @@ else if (params.ref == "highRisk") {
     REF_HPV = file("${baseDir}/ref_fasta/hpvHighRisk.fasta")
 }
 // R script path
-MERGE_STATS_R = file("${baseDir}/scripts/analysis.R")
+MERGE_STATS_R = file("${baseDir}/scripts/analysis_aws.R")
 // Workflow display header
 def hpvheader() {
     return """
@@ -183,10 +183,10 @@ workflow {
         REF_HPV
     )
     Bam_Sorting (
-        Aligning.out[0]
+        Aligning.out
     )
     Analysis (
-        Aligning.out[0].collect(),
+        Aligning.out[1].collect(),
         MERGE_STATS_R,
         params.runName
     )

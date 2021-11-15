@@ -5,20 +5,21 @@
  */
 process Trimming {
     container "docker.io/paulrkcruz/hrv-pipeline:latest"
-    // errorStrategy 'retry'
-    // maxRetries 3
+    errorStrategy 'retry'
+    maxRetries 3
     // echo true
 
     input:
-        file R1 //from input_read_ch
-        file ADAPTERS_SE
-        val MINLEN
-        val SETTING
-        val LEADING
-        val TRAILING
-        val SWINDOW
+    file R1 //from input_read_ch
+    file ADAPTERS_SE
+    val MINLEN
+    val SETTING
+    val LEADING
+    val TRAILING
+    val SWINDOW
+
     output:
-        tuple env(base),file("*.trimmed.fastq.gz"), file("*summary.csv")// into Trimming_ch
+    tuple env(base),file("*.trimmed.fastq.gz"), file("*summary.csv")// into Trimming_ch
 
     publishDir "${params.outdir}trimmed_fastqs", mode: 'copy',pattern:'*.trimmed.fastq*'
 
@@ -47,17 +48,18 @@ process Trimming {
  */
 process Aligning {
     container "quay.io/biocontainers/bbmap:38.86--h1296035_0"
-    // errorStrategy 'retry'
-    // maxRetries 3
-    echo true
+    errorStrategy 'retry'
+    maxRetries 3
+    // echo true
 
     input:
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_summary.csv")// from Trimming_ch
-        file REF_HPV
+    tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_summary.csv")// from Trimming_ch
+    file REF_HPV
 
     output:
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// into Align_ch
-    
+    tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam")// into Align_ch
+    tuple val(base), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// into Analysis_ch
+
     publishDir "${params.outdir}bbmap_scaf_stats", mode: 'copy', pattern:'*_hpvAll_scafstats.txt*'
     publishDir "${params.outdir}bbmap_cov_stats", mode: 'copy', pattern:'*_hpvAll_covstats.txt*'    
 
@@ -79,15 +81,15 @@ process Aligning {
  */
 process Bam_Sorting { 
     container "quay.io/greninger-lab/swift-pipeline:latest"
-    // errorStrategy 'retry'
-    // maxRetries 3
+    errorStrategy 'retry'
+    maxRetries 3
     // echo true
 
     input:
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Align_ch
+    tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_stats1.csv"), file("${base}_hpvAll.sam")// from Align_ch
 
     output:
-        tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_hpvAll.sam"), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt"), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")//  into Analysis_ch   
+    tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_hpvAll.sam"), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")// into Bam_sorted_ch   
 
     publishDir "${params.outdir}trim_stats", mode: 'copy', pattern:'*_trim_stats.csv*'
     publishDir "${params.outdir}bam_sorted", mode: 'copy', pattern:'*_hpvAll.sorted.bam*'
@@ -108,33 +110,47 @@ process Bam_Sorting {
  * Analysis summary creation utilizing R script.
  */
 process Analysis {
-    container "docker.io/rocker/tidyverse:latest"
+    container "docker.io/paulrkcruz/hpv_pl:latest"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
 
     input:
-    file("${base}_hpvAll_scafstats.txt")// from Bbmap_scaf_stats_ch.collect()     
+    tuple val(base), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Analysis_ch
     file MERGE_STATS_R
     val runName
+
+    output:
+    tuple val(base), file("${base}.trimmed.fastq.gz"), file("${base}_hpvAll.sam"), file("${base}_hpvAll.sorted.bam"), file("${base}_trim_stats.csv")// into Analysis_ch   
+
+    publishDir "${params.outdir}analysis", mode: 'copy', pattern:'*scafstats*'
 
     script:
     """
     #!/bin/bash
-
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${runName}.csv'
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${runName}.csv'
-    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${runName}.csv'
     
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_filtered_scafstats_${runName}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_all_scafstats_${runName}.csv'
+    echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_topHit_scafstats_${runName}.csv'
+
     if [ ! -d ${params.outdir}analysis ]; then
     mkdir -p ${params.outdir}analysis;
     fi;
 
-    cp filtered_scafstats_${runName}.csv ${params.outdir}analysis/
-    cp all_scafstats_${runName}.csv ${params.outdir}analysis/
-    cp topHit_scafstats_${runName}.csv ${params.outdir}analysis/
+    if [ ! -d tmp ]; then
+    mkdir -p tmp;
+    fi;
+
+    cp HR_filtered_scafstats_${runName}.csv ${params.outdir}analysis/
+    cp HR_all_scafstats_${runName}.csv ${params.outdir}analysis/
+    cp HR_topHit_scafstats_${runName}.csv ${params.outdir}analysis/
+    cp --parents *.txt ${params.outdir}bbmap_scaf_stats/ tmp/
+    cp --parents *.txt ${params.outdir}bbmap_cov_stats/ tmp/
 
     ls -latr
-    Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'${params.outdir}\' \'${params.outdir}\'
+    Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'tmp/\' \'${params.outdir}analysis/\'
+
+
+
     """
 }
