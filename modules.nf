@@ -38,7 +38,6 @@ process Trimming {
     echo Sample_Name,Raw_Reads,Trimmed_Reads,Percent_Trimmed> \$base'_summary.csv'
     printf "\$base,\$num_untrimmed,\$num_trimmed,\$percent_trimmed" >> \$base'_summary.csv'
     ls -latr
-
     """
 }
 /*
@@ -65,11 +64,8 @@ process Aligning {
 
     """
     #!/bin/bash
-
     bbmap.sh in=${base}.trimmed.fastq.gz ref=${REF_HPV} outm=${base}_hpvAll.sam outu=${base}_nope.sam maxindel=9 ambiguous=best threads=${task.cpus} scafstats=${base}_hpvAll_scafstats.txt covstats=${base}_hpvAll_covstats.txt -Xmx6g > bbmap_out.txt 2>&1 
-
     cp ${base}_summary.csv ${base}_stats1.csv
-
     """
 }
 // /usr/local/bin/bbmap.sh
@@ -95,12 +91,9 @@ process Bam_Sorting {
     script:
     """
     #!/bin/bash
-
     /usr/local/miniconda/bin/samtools view -S -b ${base}_hpvAll.sam > ${base}_hpvAll.bam
     /usr/local/miniconda/bin/samtools sort -@ ${task.cpus} ${base}_hpvAll.bam > ${base}_hpvAll.sorted.bam
-
     cp ${base}_stats1.csv ${base}_trim_stats.csv
-
     """
 }
 /*
@@ -108,20 +101,19 @@ process Bam_Sorting {
  * Analysis summary creation utilizing R script.
  */
 process Analysis {
-    container "docker.io/rocker/tidyverse:latest"
+    // container "docker.io/rocker/tidyverse:latest"
     // errorStrategy 'retry'
     // maxRetries 3
     // echo true
 
     input:
-    file("${base}_hpvAll_scafstats.txt")// from Bbmap_scaf_stats_ch.collect()     
+    tuple val(base), file("${base}_hpvAll_scafstats.txt"), file("${base}_hpvAll_covstats.txt")// from Bbmap_scaf_stats_ch.collect()     
     file MERGE_STATS_R
     val runName
 
     script:
     """
     #!/bin/bash
-
     # echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'filtered_scafstats_${runName}.csv'
     # echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'all_scafstats_${runName}.csv'
     # echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'topHit_scafstats_${runName}.csv'
@@ -129,15 +121,12 @@ process Analysis {
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_filtered_scafstats_${runName}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_all_scafstats_${runName}.csv'
     echo Sample, Reference, Percent_Unambiguous_Reads, x, Percent_Ambiguous_Reads, x, Unambiguous_Reads, Ambiguous Reads, Assigned Reads, x> 'HR_topHit_scafstats_${runName}.csv'
-
     if [ ! -d ${params.outdir}analysis ]; then
     mkdir -p ${params.outdir}analysis;
     fi;
-    
     cp filtered_scafstats_${runName}.csv ${params.outdir}analysis/
     cp all_scafstats_${runName}.csv ${params.outdir}analysis/
     cp topHit_scafstats_${runName}.csv ${params.outdir}analysis/
-
     ls -latr
     Rscript --vanilla ${MERGE_STATS_R} \'${runName}' \'${params.outdir}\' \'${params.outdir}\'
     """
